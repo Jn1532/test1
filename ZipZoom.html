@@ -1,0 +1,161 @@
+
+<script src="http://d3js.org/d3.v3.min.js"></script>
+<script src="http://d3js.org/queue.v1.min.js"></script>
+<script src="http://d3js.org/topojson.v1.min.js"></script>
+<script>
+myApp.directive('d3',function(){  return {
+restrict: "E",
+template: "<div class='map-display' id='mapContainer'></div>",
+link: function(scope,element){
+
+var width = 381,
+height = 236,
+active = d3.select(null);
+
+var projection = d3.geo.albersUsa()
+.scale(343)
+.translate([width / 3, height / 3]);
+
+var zoom = d3.behavior.zoom()
+.translate([0, 0])
+.scale(1.5)
+.scaleExtent([1, 8])
+.on("zoom", zoomed);
+
+var path = d3.geo.path()
+.projection(projection);
+
+var ttip = d3.select("body")
+.append("div")
+.attr('class','ttip')
+
+var svg  = d3.select('div#mapContainer').append("svg")
+.attr("width", width)
+.attr("height", height)
+.on("click", stopped, true);
+
+svg.append("rect")
+.attr("class", "background")
+.attr("width", width)
+.attr("height", height)
+.on("click", reset);
+
+var g = svg.append("g");
+
+svg.call(zoom) // delete this line to disable free zooming
+.call(zoom.event);
+
+d3.json("/assets/maps/states_usa.topo.json", function(error, us) {
+// console.log(topojson.feature(us, us.objects.states).features);
+g.append("g")
+.attr("id", "states")
+.selectAll("path")
+.data(topojson.feature(us, us.objects.states).features)
+.enter()
+.append("path")
+.attr("d", path)
+.attr("id", function(d){ return d.id; })
+.on("click", scope.state_click)
+.on("mouseover", function(d){
+return ttip.style("visibility", "visible").text(d.properties.name);
+})
+.on("mousemove", function(){
+return ttip.style("top", (event.pageY-10)+"px").style("left",(event.pageX+10)+"px");
+})
+.on("mouseout", function(){
+return ttip.style("visibility", "hidden");
+});
+});
+
+function zoomed(){
+g.style("stroke-width", 1.5 / d3.event.scale + "px");
+g.attr("transform", "translate(" + d3.event.translate + ")scale(" + d3.event.scale + ")");
+}
+
+function stopped(){
+if (d3.event.defaultPrevented)
+d3.event.stopPropagation();
+}
+
+function reset(){
+console.log('Reset Called');
+g.selectAll(["#cities"]).remove();
+active.classed("active", false);
+active = d3.select(null);
+
+svg.transition()
+.duration(750)
+.call(zoom.translate([0, 0]).scale(1.5).event);
+}
+
+scope.state_click = function(d) {
+g.selectAll(["#cities"]).remove();
+if (active.node() === this) return reset();
+
+active.classed("active", false);
+active = d3.select(this).classed("active", true);
+
+var bounds = path.bounds(d),
+dx = bounds[1][0] - bounds[0][0],
+dy = bounds[1][1] - bounds[0][1],
+x = (bounds[0][0] + bounds[1][0]) / 2,
+y = (bounds[0][1] + bounds[1][1]) / 2,
+scale = 1 / Math.max(dx / width, dy / height),
+translate = [width / 2 - scale * x, height / 2 - scale * y];
+
+svg.transition()
+.duration(750)
+.call(zoom.translate(translate).scale(scale).event);
+
+d3.json("/assets/maps/citiesStates/"+d.id+".json", function(error, us) {
+g.append("g")
+.attr("id", "cities")
+.selectAll("path")
+.data(us)
+.enter()
+.append("path")
+.attr("d", path)
+.attr("class", function(d){
+var cl = "county_border"
+$.each(scope.cities, function(key,city){
+if(d.properties.name == city.data && city.dataDisType == "City")
+cl = "county_border selectedCity";
+});
+return cl;
+})
+.attr("id", function(d){ return d.properties.name.toLowerCase();})
+.on("click", scope.county_click)
+.on("mouseover", function(d){
+return ttip.style("visibility", "visible").text(d.properties.name);
+})
+.on("mousemove", function(){
+return ttip.style("top", (event.pageY-10)+"px").style("left",(event.pageX+10)+"px");
+})
+.on("mouseout", function(){
+return ttip.style("visibility", "hidden");
+});
+});
+}
+
+scope.county_click = function(d) {
+if (active.node() === this) return $("#"+d.properties.state).d3Click();
+
+active.classed("active", false);
+active = d3.select(this).classed("active", true);
+
+var bounds = path.bounds(d),
+dx = bounds[1][0] - bounds[0][0],
+dy = bounds[1][1] - bounds[0][1],
+x = (bounds[0][0] + bounds[1][0]) / 2,
+y = (bounds[0][1] + bounds[1][1]) / 2,
+scale = 1 / Math.max(dx / width, dy / height),
+translate = [width / 2 - scale * x, height / 2 - scale * y];
+
+svg.transition()
+.duration(750)
+.call(zoom.translate(translate).scale(scale).event);
+}
+}
+}
+})
+    </script>
